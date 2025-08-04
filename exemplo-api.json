@@ -2,8 +2,5 @@
   "id": 1,
   "nome": "João Silva",
   "data_nascimento": "1990-05-15",
-  "email": "joao.silva@email.com",
-  "imagem": "https://picsum.photos/400/300?random=1",
-  "cargo": "Desenvolvedor Full Stack",
-  "empresa": "Tech Solutions"
+  "imagem": "https://picsum.photos/400/300?random=1"
 }

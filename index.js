@@ -17,10 +17,6 @@ const CONFIG = {
     // Placeholders que serão substituídos no template
     PLACEHOLDERS: {
         NOME: '{{NOME}}',
-        TITULO: '{{TITULO}}',
-        CARGO: '{{CARGO}}',
-        EMPRESA: '{{EMPRESA}}',
-        EMAIL: '{{EMAIL}}',
         DATA_NASCIMENTO: '{{DATA_NASCIMENTO}}',
         // Para imagens, você deve nomear a imagem no template como "user-image" ou similar
         IMAGE_NAME: 'user-image'
@@ -67,10 +63,7 @@ class PPTXTemplateAutomation {
             // Mapeia os dados conforme a estrutura do seu JSON
             const userData = {
                 nome: data.nome || data.name || 'Nome não encontrado',
-                email: data.email || '',
                 dataNascimento: data.data_nascimento || '',
-                cargo: data.cargo || '',
-                empresa: data.empresa || '',
                 // Usa a imagem do JSON ou um placeholder
                 imagemUrl: data.imagem || `https://picsum.photos/400/300?random=${data.id || 1}`
             };
@@ -112,11 +105,8 @@ class PPTXTemplateAutomation {
 1. Coloque seu arquivo template.pptx na pasta do projeto
 2. No PowerPoint, use os seguintes placeholders em caixas de texto:
    - {{NOME}} - será substituído pelo nome
-   - {{CARGO}} - será substituído pelo cargo
-   - {{EMPRESA}} - será substituído pela empresa
-   - {{EMAIL}} - será substituído pelo email
    - {{DATA_NASCIMENTO}} - será substituído pela data de nascimento
-3. Para imagens, nomeie a imagem como "user-image" no PowerPoint`);
+3. Para imagens, insira qualquer imagem que será substituída automaticamente`);
         }
         console.log('✅ Template encontrado');
     }
@@ -125,18 +115,9 @@ class PPTXTemplateAutomation {
     replaceTextInXML(xmlContent, userData) {
         let updatedXml = xmlContent;
         
-        // Substitui placeholders
+        // Substitui apenas nome e data de nascimento
         updatedXml = updatedXml.replace(new RegExp(CONFIG.PLACEHOLDERS.NOME, 'g'), userData.nome);
-        updatedXml = updatedXml.replace(new RegExp(CONFIG.PLACEHOLDERS.CARGO, 'g'), userData.cargo);
-        updatedXml = updatedXml.replace(new RegExp(CONFIG.PLACEHOLDERS.EMPRESA, 'g'), userData.empresa);
-        updatedXml = updatedXml.replace(new RegExp(CONFIG.PLACEHOLDERS.EMAIL, 'g'), userData.email);
         updatedXml = updatedXml.replace(new RegExp(CONFIG.PLACEHOLDERS.DATA_NASCIMENTO, 'g'), userData.dataNascimento);
-        
-        // Placeholder combinado para título completo
-        const tituloCompleto = userData.cargo && userData.empresa ? 
-            `${userData.cargo} - ${userData.empresa}` : 
-            userData.cargo || userData.empresa || '';
-        updatedXml = updatedXml.replace(new RegExp(CONFIG.PLACEHOLDERS.TITULO, 'g'), tituloCompleto);
 
         return updatedXml;
     }
@@ -215,7 +196,6 @@ class PPTXTemplateAutomation {
             // Cria nova apresentação
             const pptx = new PptxGenJs();
             pptx.author = 'Sistema Automatizado';
-            pptx.company = userData.empresa || 'Sua Empresa';
             pptx.title = `Apresentação - ${userData.nome}`;
 
             // Adiciona slide com design personalizado
@@ -234,46 +214,21 @@ class PPTXTemplateAutomation {
                 align: 'center'
             });
 
-            // Subtítulo
-            if (userData.cargo && userData.empresa) {
-                slide.addText(`${userData.cargo} - ${userData.empresa}`, {
-                    x: 0.5, y: 1.3, w: 9, h: 0.6,
-                    fontSize: 18,
-                    fontFace: 'Arial',
-                    color: '546E7A',
-                    align: 'center'
-                });
-            }
+            // Data de nascimento
+            slide.addText(`🎂 ${userData.dataNascimento}`, {
+                x: 0.5, y: 1.5, w: 9, h: 0.6,
+                fontSize: 18,
+                fontFace: 'Arial',
+                color: '546E7A',
+                align: 'center'
+            });
 
             // Imagem
             slide.addImage({
                 path: imagePath,
-                x: 3, y: 2.5, w: 4, h: 3,
+                x: 3, y: 2.5, w: 4, h: 4,
                 rounding: true
             });
-
-            // Informações adicionais
-            let yPos = 6;
-            if (userData.email) {
-                slide.addText(`📧 ${userData.email}`, {
-                    x: 1, y: yPos, w: 8, h: 0.4,
-                    fontSize: 14,
-                    fontFace: 'Arial',
-                    color: '37474F',
-                    align: 'center'
-                });
-                yPos += 0.5;
-            }
-
-            if (userData.dataNascimento) {
-                slide.addText(`🎂 ${userData.dataNascimento}`, {
-                    x: 1, y: yPos, w: 8, h: 0.4,
-                    fontSize: 14,
-                    fontFace: 'Arial',
-                    color: '37474F',
-                    align: 'center'
-                });
-            }
 
             // Gera o arquivo
             const outputFileName = `apresentacao_${userData.nome.replace(/\s+/g, '_')}_${Date.now()}.pptx`;
