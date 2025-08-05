@@ -36,3 +36,5 @@
 
 ##### Outputs com dados da requisição
 <img src="docs/output.png" alt="Template" width="1200" align="center" />
+
+<img src="docs/processo.gif" alt="Template" width="1200" align="center" />

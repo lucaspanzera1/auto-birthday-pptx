@@ -9,7 +9,7 @@ const CONFIG = {
 
     // File Paths
     PATHS: {
-        TEMPLATE: './template-sydle.pptx',
+        TEMPLATE: './template.pptx',
         OUTPUT_DIR: './output',
         TEMP_DIR: './temp'
     },
