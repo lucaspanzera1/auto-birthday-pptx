@@ -4,13 +4,14 @@
   "description": "Aplicação para automatizar alterações em templates PowerPoint",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "dependencies": {
-    "axios": "^1.11.0",
-    "fs": "^0.0.1-security",
+ "dependencies": {
     "pptxgenjs": "^3.12.0",
+    "axios": "^1.6.0",
+    "jszip": "^3.10.1",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
