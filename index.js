@@ -11,7 +11,7 @@ const CONFIG = {
     API_URL: './exemplo-api.json',
     
     // Caminhos dos arquivos
-    TEMPLATE_PATH: './template-sydle.pptx',
+    TEMPLATE_PATH: './template.pptx',
     OUTPUT_DIR: './output',
     
     // Placeholders que serão substituídos no template
