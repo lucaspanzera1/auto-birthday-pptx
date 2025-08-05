@@ -1,92 +1,193 @@
-const PresentationController = require('./controllers/presentationController');
-const Logger = require('./utils/logger');
+const DataService = require('../services/dataService');
+const ImageService = require('../services/imageService');
+const TemplateService = require('../services/templateService');
+const PresentationService = require('../services/presentationService');
+const FileHelper = require('../utils/fileHelper');
+const Logger = require('../utils/logger');
 
-/**
- * Função principal da aplicação
- */
-async function main() {
-    try {
-        // Opções de configuração (pode ser expandido)
-        const options = {
-            layout: process.argv[2] || 'default' // Permite passar layout via linha de comando
-        };
+class PresentationController {
+    /**
+     * Método principal que coordena todo o processo
+     */
+    static async generatePresentation(options = {}) {
+        let imagePath = null;
+        
+        try {
+            Logger.start('Iniciando geração de apresentação PowerPoint...');
 
-        Logger.separator();
-        Logger.start('AUTOMAÇÃO POWERPOINT - SISTEMA INICIADO');
-        Logger.separator();
+            // 1. Buscar dados do usuário
+            const userData = await DataService.fetchUserData();
+            DataService.validateUserData(userData);
 
-        // Mostra estatísticas do sistema
-        const stats = await PresentationController.getStats();
-        if (stats) {
-            Logger.info('📊 Status do Sistema:');
-            console.log(`   Template: ${stats.templateExists ? '✅' : '❌'}`);
-            console.log(`   Dados: ${stats.dataSourceExists ? '✅' : '❌'}`);
-            console.log(`   Output Dir: ${stats.outputDirExists ? '✅' : '❌'}`);
-            console.log(`   Layouts: ${stats.availableLayouts.join(', ')}`);
-            
-            if (stats.templatePlaceholders && stats.templatePlaceholders.length > 0) {
-                console.log(`   Placeholders: ${stats.templatePlaceholders.join(', ')}`);
+            // 2. Baixar imagem se disponível
+            if (userData.imagemUrl) {
+                imagePath = await ImageService.downloadImage(userData.imagemUrl);
             }
-            Logger.separator();
+
+            // 3. Tentar usar template primeiro, depois fallback
+            let outputPath;
+            
+            try {
+                outputPath = await TemplateService.modifyTemplate(userData, imagePath);
+                Logger.info('Apresentação gerada usando template');
+            } catch (templateError) {
+                Logger.warning('Não foi possível usar template, criando nova apresentação...');
+                Logger.error('Erro do template', templateError);
+                
+                // Fallback: criar nova apresentação
+                const layoutType = options.layout || 'default';
+                outputPath = await PresentationService.createCustomLayout(userData, imagePath, layoutType);
+                Logger.info('Apresentação gerada do zero');
+            }
+
+            // 4. Limpeza de arquivos temporários
+            await this.cleanup(imagePath);
+
+            Logger.success('Processo concluído com sucesso!');
+            Logger.file('Arquivo final', outputPath);
+
+            return {
+                success: true,
+                outputPath,
+                userData: {
+                    nome: userData.nome,
+                    id: userData.id
+                }
+            };
+
+        } catch (error) {
+            Logger.error('Erro durante o processo', error);
+            
+            // Limpeza em caso de erro
+            await this.cleanup(imagePath);
+            
+            return {
+                success: false,
+                error: error.message
+            };
         }
+    }
 
-        // Executa a geração da apresentação
-        const result = await PresentationController.generatePresentation(options);
+    /**
+     * Gera apresentação usando apenas template
+     */
+    static async generateFromTemplate(userData = null) {
+        let imagePath = null;
+        
+        try {
+            // Usa dados fornecidos ou busca da fonte
+            const finalUserData = userData || await DataService.fetchUserData();
+            
+            // Baixa imagem se necessário
+            if (finalUserData.imagemUrl) {
+                imagePath = await ImageService.downloadImage(finalUserData.imagemUrl);
+            }
 
-        if (result.success) {
-            Logger.separator();
-            Logger.success('🎉 PROCESSO CONCLUÍDO COM SUCESSO!');
-            Logger.file('📄 Arquivo gerado', result.outputPath);
-            Logger.info('👤 Usuário', result.userData.nome);
-            Logger.separator();
-        } else {
-            Logger.separator();
-            Logger.error('💥 FALHA NO PROCESSO', { message: result.error });
-            Logger.separator();
-            process.exit(1);
+            const outputPath = await TemplateService.modifyTemplate(finalUserData, imagePath);
+            await this.cleanup(imagePath);
+
+            return { success: true, outputPath };
+        } catch (error) {
+            await this.cleanup(imagePath);
+            throw error;
         }
+    }
 
-    } catch (error) {
-        Logger.separator();
-        Logger.error('💥 ERRO CRÍTICO NA APLICAÇÃO', error);
-        Logger.separator();
-        process.exit(1);
+    /**
+     * Gera apresentação do zero
+     */
+    static async generateFromScratch(userData = null, layoutType = 'default') {
+        let imagePath = null;
+        
+        try {
+            // Usa dados fornecidos ou busca da fonte
+            const finalUserData = userData || await DataService.fetchUserData();
+            
+            // Baixa imagem se necessário
+            if (finalUserData.imagemUrl) {
+                imagePath = await ImageService.downloadImage(finalUserData.imagemUrl);
+            }
+
+            const outputPath = await PresentationService.createCustomLayout(
+                finalUserData, 
+                imagePath, 
+                layoutType
+            );
+            
+            await this.cleanup(imagePath);
+
+            return { success: true, outputPath };
+        } catch (error) {
+            await this.cleanup(imagePath);
+            throw error;
+        }
+    }
+
+    /**
+     * Lista placeholders disponíveis no template
+     */
+    static async getTemplatePlaceholders() {
+        try {
+            const placeholders = await TemplateService.findPlaceholders();
+            Logger.info('Placeholders encontrados no template', placeholders);
+            return placeholders;
+        } catch (error) {
+            Logger.error('Erro ao buscar placeholders', error);
+            return [];
+        }
+    }
+
+    /**
+     * Validação de dados antes da geração
+     */
+    static async validateData() {
+        try {
+            const userData = await DataService.fetchUserData();
+            DataService.validateUserData(userData);
+            Logger.info('Dados validados com sucesso');
+            return { valid: true, userData };
+        } catch (error) {
+            Logger.error('Erro na validação', error);
+            return { valid: false, error: error.message };
+        }
+    }
+
+    /**
+     * Limpeza de arquivos temporários
+     */
+    static async cleanup(imagePath) {
+        try {
+            if (imagePath) {
+                FileHelper.deleteFile(imagePath);
+            }
+            ImageService.cleanupTempImages();
+        } catch (error) {
+            Logger.warning('Erro durante limpeza de arquivos temporários');
+        }
+    }
+
+    /**
+     * Obtém estatísticas do processo
+     */
+    static async getStats() {
+        try {
+            const stats = {
+                templateExists: FileHelper.fileExists(require('../config/config').PATHS.TEMPLATE),
+                dataSourceExists: FileHelper.fileExists(require('../config/config').API.URL),
+                outputDirExists: FileHelper.fileExists(require('../config/config').PATHS.OUTPUT_DIR),
+                availableLayouts: ['default', 'modern', 'minimal']
+            };
+
+            if (stats.templateExists) {
+                stats.templatePlaceholders = await this.getTemplatePlaceholders();
+            }
+
+            return stats;
+        } catch (error) {
+            Logger.error('Erro ao obter estatísticas', error);
+            return null;
+        }
     }
 }
 
-/**
- * Função para uso programático (quando importado como módulo)
- */
-async function generatePresentation(options = {}) {
-    return await PresentationController.generatePresentation(options);
-}
-
-/**
- * Função para gerar apenas do template
- */
-async function generateFromTemplate(userData = null) {
-    return await PresentationController.generateFromTemplate(userData);
-}
-
-/**
- * Função para gerar do zero
- */
-async function generateFromScratch(userData = null, layout = 'default') {
-    return await PresentationController.generateFromScratch(userData, layout);
-}
-
-// Executa apenas se for chamado diretamente
-if (require.main === module) {
-    main().catch(error => {
-        Logger.error('Erro não tratado', error);
-        process.exit(1);
-    });
-}
-
-// Exporta funções para uso como módulo
-module.exports = {
-    generatePresentation,
-    generateFromTemplate,
-    generateFromScratch,
-    PresentationController
-};
+module.exports = PresentationController;
