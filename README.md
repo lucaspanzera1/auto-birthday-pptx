@@ -1,5 +1,9 @@
 # auto-birthday-pptx
-🎉Automatically generates personalized birthday PowerPoint slides from a predefined template using user data (name, date, photo).
+### Ideia principal:
+A ideia é que o pessoal do Facilities, tenha uma interface web, onde podem verificar os aniversariantes do mês, e baixar a imagem padrão de feliz aniversário, pronta para enviarem para o bocão.
+
+### Atualmente
+Atualmente o processo de fazer a mensagem de aniversário é bem manual, eles devem buscar um processo dentro do ONE, abrir pequenos modais, para verem quem faz aniversário em cada dia, baixar a foto, abrir o template da mensagem, alterar a foto e nome de forma manual.
 
 ## Como funciona?
 * Existe um template .pptx, com uma imagem e placeholders {{NOME}}{{DATA_NASCIMENTO}}
@@ -10,8 +14,11 @@
 * - Subistitui a imagem e placeholders do template
 * - Gera um output com as alterções.
 
+<img src="docs/img/fluxo-app.png" alt="aniversariantes" width="1200" align="center" />
+
+
 ##### Template com placeholders
-<img src="docs/template.png" alt="Template" width="1200" align="center" />
+<img src="docs/img/template.png" alt="Template" width="1200" align="center" />
 
 ```bash
 🚀 Iniciando automação do PowerPoint com Template...
@@ -35,6 +42,6 @@
 ```
 
 ##### Outputs com dados da requisição
-<img src="docs/output.png" alt="Template" width="1200" align="center" />
+<img src="docs/img/output.png" alt="Template" width="1200" align="center" />
 
-<img src="docs/processo.gif" alt="Template" width="1200" align="center" />
+<img src="docs/img/processo.gif" alt="Template" width="1200" align="center" />

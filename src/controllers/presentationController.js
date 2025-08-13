@@ -7,60 +7,133 @@ const Logger = require('../utils/logger');
 
 class PresentationController {
     /**
-     * Método principal que coordena todo o processo
+     * Método principal que coordena todo o processo para TODOS os aniversariantes
      */
-    static async generatePresentation(options = {}) {
-        let imagePath = null;
+    static async generateAllPresentations(options = {}) {
+        const results = [];
+        const tempFiles = [];
         
         try {
-            Logger.start('Iniciando geração de apresentação PowerPoint...');
+            Logger.start('Iniciando geração de apresentações PowerPoint...');
 
-            // 1. Buscar dados do usuário
-            const userData = await DataService.fetchUserData();
-            DataService.validateUserData(userData);
-
-            // 2. Baixar imagem se disponível
-            if (userData.imagemUrl) {
-                imagePath = await ImageService.downloadImage(userData.imagemUrl);
-            }
-
-            // 3. Tentar usar template primeiro, depois fallback
-            let outputPath;
+            // 1. Buscar TODOS os dados de aniversariantes
+            const allBirthdays = await DataService.fetchBirthdayData();
             
-            try {
-                outputPath = await TemplateService.modifyTemplate(userData, imagePath);
-                Logger.info('Apresentação gerada usando template');
-            } catch (templateError) {
-                Logger.warning('Não foi possível usar template, criando nova apresentação...');
-                Logger.error('Erro do template', templateError);
-                
-                // Fallback: criar nova apresentação
-                const layoutType = options.layout || 'default';
-                outputPath = await PresentationService.createCustomLayout(userData, imagePath, layoutType);
-                Logger.info('Apresentação gerada do zero');
+            if (allBirthdays.length === 0) {
+                throw new Error('Nenhum aniversariante encontrado');
             }
 
-            // 4. Limpeza de arquivos temporários
-            await this.cleanup(imagePath);
+            Logger.info(`Processando ${allBirthdays.length} aniversariantes...`);
 
-            Logger.success('Processo concluído com sucesso!');
-            Logger.file('Arquivo final', outputPath);
+            // 2. Processar cada aniversariante
+            for (let i = 0; i < allBirthdays.length; i++) {
+                const birthday = allBirthdays[i];
+                Logger.info(`Processando ${i + 1}/${allBirthdays.length}: ${birthday.name}`);
+                
+                try {
+                    const result = await this.generateSinglePresentation(birthday, options, i + 1);
+                    results.push(result);
+                    
+                    // Coleta arquivos temporários para limpeza
+                    if (result.tempImagePath) {
+                        tempFiles.push(result.tempImagePath);
+                    }
+                    
+                } catch (error) {
+                    Logger.error(`Erro ao processar ${birthday.name}`, error);
+                    results.push({
+                        success: false,
+                        name: birthday.name,
+                        error: error.message
+                    });
+                }
+            }
+
+            // 3. Limpeza de arquivos temporários
+            await this.cleanupMultiple(tempFiles);
+
+            const successCount = results.filter(r => r.success).length;
+            Logger.success(`Processo concluído! ${successCount}/${allBirthdays.length} apresentações geradas`);
 
             return {
                 success: true,
-                outputPath,
-                userData: {
-                    nome: userData.nome,
-                    id: userData.id
-                }
+                totalProcessed: allBirthdays.length,
+                successCount,
+                results
             };
 
         } catch (error) {
             Logger.error('Erro durante o processo', error);
+            await this.cleanupMultiple(tempFiles);
             
-            // Limpeza em caso de erro
-            await this.cleanup(imagePath);
+            return {
+                success: false,
+                error: error.message,
+                results
+            };
+        }
+    }
+
+    /**
+     * Gera apresentação para um único aniversariante
+     */
+    static async generateSinglePresentation(birthday, options = {}, index = 1) {
+        let imagePath = null;
+        
+        try {
+            // Converte dados do aniversariante para formato compatível
+            const userData = this.convertBirthdayToUserData(birthday);
+
+            // Baixar imagem se disponível
+            if (userData.imagemUrl) {
+                imagePath = await ImageService.downloadImage(userData.imagemUrl);
+            }
+
+            // Tentar usar template primeiro, depois fallback
+            let outputPath;
             
+            try {
+                outputPath = await TemplateService.modifyTemplate(userData, imagePath, index);
+                Logger.info(`Apresentação gerada usando template para ${userData.nome}`);
+            } catch (templateError) {
+                Logger.warning(`Template falhou para ${userData.nome}, criando nova apresentação...`);
+                
+                // Fallback: criar nova apresentação
+                const layoutType = options.layout || 'default';
+                outputPath = await PresentationService.createCustomLayout(userData, imagePath, layoutType, index);
+                Logger.info(`Apresentação gerada do zero para ${userData.nome}`);
+            }
+
+            return {
+                success: true,
+                outputPath,
+                tempImagePath: imagePath,
+                userData: {
+                    nome: userData.nome,
+                    id: userData.id,
+                    dataNascimento: userData.dataNascimento
+                }
+            };
+
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
+     * Método original - agora processa apenas o primeiro aniversariante (compatibilidade)
+     */
+    static async generatePresentation(options = {}) {
+        try {
+            const allResults = await this.generateAllPresentations(options);
+            
+            // Retorna apenas o primeiro resultado para compatibilidade
+            if (allResults.results && allResults.results.length > 0) {
+                return allResults.results[0];
+            }
+            
+            return allResults;
+        } catch (error) {
             return {
                 success: false,
                 error: error.message
@@ -69,7 +142,106 @@ class PresentationController {
     }
 
     /**
-     * Gera apresentação usando apenas template
+     * Gera apresentações usando apenas template para todos
+     */
+    static async generateAllFromTemplate() {
+        const results = [];
+        const tempFiles = [];
+        
+        try {
+            const allBirthdays = await DataService.fetchBirthdayData();
+            
+            for (let i = 0; i < allBirthdays.length; i++) {
+                const birthday = allBirthdays[i];
+                const userData = this.convertBirthdayToUserData(birthday);
+                
+                let imagePath = null;
+                try {
+                    if (userData.imagemUrl) {
+                        imagePath = await ImageService.downloadImage(userData.imagemUrl);
+                    }
+
+                    const outputPath = await TemplateService.modifyTemplate(userData, imagePath, i + 1);
+                    results.push({ success: true, outputPath, name: userData.nome });
+                    
+                    if (imagePath) tempFiles.push(imagePath);
+                    
+                } catch (error) {
+                    results.push({ success: false, error: error.message, name: userData.nome });
+                    if (imagePath) tempFiles.push(imagePath);
+                }
+            }
+
+            await this.cleanupMultiple(tempFiles);
+            return results;
+            
+        } catch (error) {
+            await this.cleanupMultiple(tempFiles);
+            throw error;
+        }
+    }
+
+    /**
+     * Gera apresentações do zero para todos
+     */
+    static async generateAllFromScratch(layoutType = 'default') {
+        const results = [];
+        const tempFiles = [];
+        
+        try {
+            const allBirthdays = await DataService.fetchBirthdayData();
+            
+            for (let i = 0; i < allBirthdays.length; i++) {
+                const birthday = allBirthdays[i];
+                const userData = this.convertBirthdayToUserData(birthday);
+                
+                let imagePath = null;
+                try {
+                    if (userData.imagemUrl) {
+                        imagePath = await ImageService.downloadImage(userData.imagemUrl);
+                    }
+
+                    const outputPath = await PresentationService.createCustomLayout(
+                        userData, 
+                        imagePath, 
+                        layoutType,
+                        i + 1
+                    );
+                    
+                    results.push({ success: true, outputPath, name: userData.nome });
+                    if (imagePath) tempFiles.push(imagePath);
+                    
+                } catch (error) {
+                    results.push({ success: false, error: error.message, name: userData.nome });
+                    if (imagePath) tempFiles.push(imagePath);
+                }
+            }
+
+            await this.cleanupMultiple(tempFiles);
+            return results;
+            
+        } catch (error) {
+            await this.cleanupMultiple(tempFiles);
+            throw error;
+        }
+    }
+
+    /**
+     * Converte dados de aniversário para formato userData esperado
+     */
+    static convertBirthdayToUserData(birthday) {
+        return {
+            id: birthday.id,
+            nome: birthday.name,
+            dataNascimento: birthday.birthdayDate,
+            imagemUrl: typeof birthday.photoInfo === 'object' 
+                ? DataService.generateDefaultImage(birthday.photoInfo.hash, birthday.id)
+                : DataService.generateDefaultImage(null, birthday.id)
+        };
+    }
+
+    /**
+     * Gera apresentação usando apenas template (compatibilidade)
      */
     static async generateFromTemplate(userData = null) {
         let imagePath = null;
@@ -94,7 +266,7 @@ class PresentationController {
     }
 
     /**
-     * Gera apresentação do zero
+     * Gera apresentação do zero (compatibilidade)
      */
     static async generateFromScratch(userData = null, layoutType = 'default') {
         let imagePath = null;
@@ -142,10 +314,13 @@ class PresentationController {
      */
     static async validateData() {
         try {
-            const userData = await DataService.fetchUserData();
-            DataService.validateUserData(userData);
-            Logger.info('Dados validados com sucesso');
-            return { valid: true, userData };
+            const allBirthdays = await DataService.fetchBirthdayData();
+            Logger.info(`${allBirthdays.length} aniversariantes encontrados e validados`);
+            return { 
+                valid: true, 
+                totalBirthdays: allBirthdays.length,
+                birthdays: allBirthdays 
+            };
         } catch (error) {
             Logger.error('Erro na validação', error);
             return { valid: false, error: error.message };
@@ -153,7 +328,7 @@ class PresentationController {
     }
 
     /**
-     * Limpeza de arquivos temporários
+     * Limpeza de arquivos temporários (único arquivo)
      */
     static async cleanup(imagePath) {
         try {
@@ -161,6 +336,24 @@ class PresentationController {
                 FileHelper.deleteFile(imagePath);
             }
             ImageService.cleanupTempImages();
+            Logger.info('Limpeza de arquivos temporários realizada');
+        } catch (error) {
+            Logger.warning('Erro durante limpeza de arquivos temporários');
+        }
+    }
+
+    /**
+     * Limpeza de múltiplos arquivos temporários
+     */
+    static async cleanupMultiple(tempFiles) {
+        try {
+            for (const file of tempFiles) {
+                if (file) {
+                    FileHelper.deleteFile(file);
+                }
+            }
+            ImageService.cleanupTempImages();
+            Logger.info('Limpeza de arquivos temporários realizada');
         } catch (error) {
             Logger.warning('Erro durante limpeza de arquivos temporários');
         }
@@ -180,6 +373,17 @@ class PresentationController {
 
             if (stats.templateExists) {
                 stats.templatePlaceholders = await this.getTemplatePlaceholders();
+            }
+
+            // Adiciona info sobre aniversariantes
+            try {
+                const validation = await this.validateData();
+                if (validation.valid) {
+                    stats.totalBirthdays = validation.totalBirthdays;
+                    stats.birthdayNames = validation.birthdays.map(b => b.name);
+                }
+            } catch (error) {
+                stats.totalBirthdays = 0;
             }
 
             return stats;
