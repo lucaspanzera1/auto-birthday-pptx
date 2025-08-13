@@ -3,7 +3,7 @@ const path = require('path');
 const CONFIG = {
     // API Configuration
     API: {
-        URL: './exemplo-api.json', // Muda para URL da API quando necessário
+        URL: './saida.json', // Muda para URL da API quando necessário
         TIMEOUT: 5000
     },
 
