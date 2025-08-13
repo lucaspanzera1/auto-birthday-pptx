@@ -3,13 +3,13 @@ const path = require('path');
 const CONFIG = {
     // API Configuration
     API: {
-        URL: './saida.json', // Muda para URL da API quando necessário
+        URL: './saida-sydle.json', // Muda para URL da API quando necessário
         TIMEOUT: 5000
     },
 
     // File Paths
     PATHS: {
-        TEMPLATE: './template.pptx',
+        TEMPLATE: './template-sydle.pptx',
         OUTPUT_DIR: './output',
         TEMP_DIR: './temp'
     },
